@@ -16,5 +16,6 @@
 			]
 		}
 	},
-	"remoteUser": "opam"
+	"remoteUser": "opam",
+	"postCreateCommand": "/home/opam/venv/bin/python3 -m pip install -U pip && /home/opam/venv/bin/pip install sphinx-proof"
 }
