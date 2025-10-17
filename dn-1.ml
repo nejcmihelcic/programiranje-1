@@ -329,9 +329,6 @@ let cikli p =
     in
     loop 0 []
     
-
-
-
 let primer_permutacije_6 = cikli permutacija_1
 (* val primer_permutacije_6 : int list list = [[0; 5]; [1; 3]; [2]; [4]] *)
 
@@ -514,7 +511,6 @@ let dodaj i j n mreza =
     Array.mapi (fun ci e -> if (ci=j) then (Some n) else e) mreza.(i)
   in
   Array.mapi (fun ri row -> if ri=i then vrstica else row) mreza
-
 
 let primer_sudoku_1 = primer_mreze |> dodaj 0 8 2
 (* val primer_sudoku_1 : mreza =
