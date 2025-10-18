@@ -454,15 +454,15 @@ type resitev = int array array
 [*----------------------------------------------------------------------------*)
 
 let primer_mreze : mreza = [|
-  [|Some 5; Some 4; None;   None;   Some 7; None;   None;   None;   None|];
-  [|Some 6; None;   None;   Some 1; Some 9; Some 5; None;   None;   None|];
-  [|None;   Some 9; Some 8; None;   None;   None;   None;   Some 6; None|];
-  [|Some 8; None;   None;   None;   Some 6; None;   None;   None;   Some 3|];
-  [|Some 4; None;   None;   Some 8; None;   Some 3; None;   None;   Some 1|];
-  [|Some 7; None;   None;   None;   Some 2; None;   None;   None;   Some 6|];
-  [|None;   Some 6; None;   None;   None;   Some 7; Some 8; None;   None|];
-  [|None;   None;   None;   Some 4; Some 1; Some 9; None;   None;   Some 5|];
-  [|None;   None;   None;   None;   Some 8; None;   None;   Some 7; Some 9|]
+ [|None; None; None; Some 9; None; Some 2; Some 7; Some 3; Some 8|];
+ [|None; Some 6; None; None; None; Some 5; None; None; Some 9|];
+ [|Some 8; Some 2; Some 9; Some 3; None; None; Some 6; None; Some 1|];
+ [|None; None; Some 1; None; None; Some 6; None; Some 8; Some 2|];
+ [|None; Some 9; Some 3; None; Some 1; None; Some 4; None; Some 5|];
+ [|None; Some 8; None; Some 7; None; None; Some 9; Some 1; None|];
+ [|Some 9; None; None; None; None; Some 7; None; None; None|];
+ [|None; Some 3; Some 8; Some 6; None; None; Some 5; None; None|];
+ [|None; None; None; Some 5; None; Some 1; Some 8; Some 9; Some 4|]
 |]
 
 let primer_resitve : resitev = [|
@@ -737,7 +737,7 @@ let kandidati (mreza : mreza) (r : int) (c : int) : int list option =
   if Option.is_some @@ get1 mreza r c then None
   else
     let to_box r c =
-      let s1 = c mod 3 in
+      let s1 = c / 3 in 
       if r<3 then s1
       else if r>5 then s1+6
       else s1+3
@@ -747,14 +747,12 @@ let kandidati (mreza : mreza) (r : int) (c : int) : int list option =
       ni_v_vrstici (mreza,r) n && ni_v_stolpcu (mreza, c) n && ni_v_skatli (mreza, b) n
     in
     let rec aux acc i : int list option =
-      if i=(-1) then Some acc
-      else
-        if preveri r c i then
-          aux (i::acc) (i-1)
-        else
-          aux acc (i-1)
-    in
-    aux [] 0
+      if not (get1 mreza r c = None) || (i=10 && acc=[]) then None
+      else if i = 10 then Some (List.rev acc)
+      else if preveri r c i then aux (i::acc) (i+1)
+      else aux acc (i+1)
+    in aux [] 1
+      
 
 let primer_sudoku_7 = kandidati primer_mreze 0 2
 (* val primer_sudoku_7 : int list option = Some [1; 2; 3] *)
@@ -777,7 +775,73 @@ let primer_sudoku_8 = kandidati primer_mreze 0 0
  možnosti.*
 [*----------------------------------------------------------------------------*)
 
-let rec resi _ = ()
+let rec resi (mreza : mreza) : resitev option =
+  let nxt i j =
+    if j<8 then (i,j+1)
+    else if j=8 && i<8 then (i+1,0)
+    else (10,10) in
+  let rec poisci_kandidata i j (acc : int * int) n : ((int * int) * int) option =
+    let k = kandidati mreza i j in
+    let i1 = fst @@ nxt i j in 
+    let j1 = snd @@ nxt i j in
+    match k with
+    | None when get1 mreza i j = None -> None
+    | None when j=8 && i=8 -> if n=10 then None else Some (acc, n)
+    | None -> poisci_kandidata i1 j1 acc n 
+    | Some lst when List.length lst = 1 -> Some ((i,j), 1)
+    | Some lst when List.length lst < n ->
+      if i=8 && j=8 then Some ((i,j), List.length lst)
+      else poisci_kandidata i1 j1 (i,j) (List.length lst)
+    | Some lst -> if (i=8 && j=8) then Some (acc, n) else poisci_kandidata i1 j1 acc n
+  in 
+  let je_resena mr : bool =
+    let rec aux i j : bool =
+      if i=10 then true
+      else
+        let i1=fst @@ nxt i j in
+        let j1=snd @@ nxt i j in
+        match get1 mr i j with
+        | None -> false
+        | Some n -> aux i1 j1
+      in
+    aux 0 0 
+  in 
+  let pretvori (mr : mreza) : resitev =
+    let conv_row (r : int option array) : int array =
+      Array.of_list @@ List.rev @@ Array.fold_left (
+        fun acc a ->
+          match a with
+          | None -> -1::acc
+          | Some n -> n::acc
+      ) [] r 
+    in
+    Array.of_list @@ List.rev @@ Array.fold_left (
+      fun acc a ->
+        (conv_row a) :: acc
+    ) [] mr
+  in
+  let get_candidate mr i j =
+    let k = kandidati mr i j in 
+    match k with
+    | None -> -1
+    | Some lst -> List.hd lst
+  in
+  let try_candidate (mr : mreza) (i : int) (j : int) (k : int list) : resitev option =
+    List.find_map (fun n -> resi @@ dodaj i j n mr) k
+  in
+  match poisci_kandidata 0 0 (0,0) 10 with
+  | None ->
+    if (je_resena mreza = true) then (Some (pretvori mreza))
+    else None
+  | Some ((i,j), n) ->
+    if n=1 then
+      let k = get_candidate mreza i j in
+      resi @@ dodaj i j k mreza
+    else
+      let k = kandidati mreza i j in
+      match k with
+      | None -> None
+      | Some lst -> try_candidate mreza i j lst
 
 let primer_sudoku_9 = resi primer_mreze
 (* val primer_sudoku_9 : resitev option =
