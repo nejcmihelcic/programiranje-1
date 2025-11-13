@@ -158,7 +158,21 @@ let enke_deljive_s_3 = DFA.(
  pregledovalniku](https://www.devtoolsdaily.com/graphviz/).
 [*----------------------------------------------------------------------------*)
 
-let dot_of_dfa _ = ""
+let dot_of_dfa (t: DFA.t) = 
+  let zac = DFA.zacetno_stanje t in
+  let nodes = String.concat " " (List.filter ((<>) zac) (DFA.seznam_stanj t)) in
+  let strPrehod ((zac : DFA.stanje),(prehodno : char),(koncno : DFA.stanje)) : string = 
+    Printf.sprintf "%s -> %s [label=\"%c\"];\n  " zac koncno prehodno in
+  let prehodi = List.fold_left (fun acc (a,b,c)-> acc ^ strPrehod (a,b,c)) "" (DFA.seznam_prehodov t) in
+  let s = Printf.sprintf "digraph DFA {
+  rankdir=LR;
+  size=\"8,5\"
+  node [shape = doublecircle]; %s;
+  node [shape = circle]; %s;
+  \"\" [shape = none];
+  \"\" -> %s;
+  %s}" zac nodes zac prehodi in
+  s
 
 let () = enke_deljive_s_3 |> dot_of_dfa |> print_endline
 
@@ -171,7 +185,25 @@ let () = enke_deljive_s_3 |> dot_of_dfa |> print_endline
  avtomat sprejme podani niz.
 [*----------------------------------------------------------------------------*)
 
-let dfa_sprejema _ _ = false
+let dfa_sprejema (dfa : DFA.t) (s : string) : bool =
+  let zac = DFA.zacetno_stanje dfa in
+  let n = String.length s in
+  let check st =
+    let aux cur i =
+      match DFA.prehodna_funkcija dfa cur st.[i] with
+      | None -> ""
+      | Some x -> x
+    in let rec go cur i =
+      if i=n then
+        DFA.je_sprejemno_stanje dfa cur
+      else
+        let newState = aux cur i in
+        if newState <> "" then
+          go newState (i+1)
+        else false
+    in go zac 0 
+  in check s
+
 
 let nizi =
   let razsiri nizi = List.map ((^) "0") nizi @ List.map ((^) "1") nizi in
