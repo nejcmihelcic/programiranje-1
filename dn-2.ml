@@ -160,18 +160,39 @@ let enke_deljive_s_3 = DFA.(
 
 let dot_of_dfa (t: DFA.t) = 
   let zac = DFA.zacetno_stanje t in
-  let nodes = String.concat " " (List.filter ((<>) zac) (DFA.seznam_stanj t)) in
+  let seznama =
+    let rec aux acc1 acc2 sez =
+      match sez with
+      | [] -> (acc1,acc2)
+      | x::xs when DFA.je_sprejemno_stanje t x -> aux (x ^ " " ^ acc1) acc2 xs
+      | x::xs -> aux acc1 (x ^ " " ^ acc2) xs
+    in aux "" "" (DFA.seznam_stanj t)
+  in
+  let validNodes = fst seznama in
+  let invalidNodes = snd seznama in 
+  let validNodeString =
+    if validNodes <> "" then
+      Printf.sprintf "node [shape = doublecircle]; %s;\n" (String.trim validNodes)
+    else
+      ""
+  in
+  let invalidNodeString =
+    if invalidNodes <> "" then
+      Printf.sprintf "node [shape = circle]; %s;\n" (String.trim invalidNodes)
+    else
+      ""
+  in
   let strPrehod ((zac : DFA.stanje),(prehodno : char),(koncno : DFA.stanje)) : string = 
     Printf.sprintf "%s -> %s [label=\"%c\"];\n  " zac koncno prehodno in
   let prehodi = List.fold_left (fun acc (a,b,c)-> acc ^ strPrehod (a,b,c)) "" (DFA.seznam_prehodov t) in
   let s = Printf.sprintf "digraph DFA {
   rankdir=LR;
   size=\"8,5\"
-  node [shape = doublecircle]; %s;
-  node [shape = circle]; %s;
+  %s;
+  %s;
   \"\" [shape = none];
   \"\" -> %s;
-  %s}" zac nodes zac prehodi in
+  %s}" validNodeString invalidNodeString zac prehodi in
   s
 
 let () = enke_deljive_s_3 |> dot_of_dfa |> print_endline
@@ -332,18 +353,50 @@ end
 
 module NFA : NFA_SIG = struct
   type stanje = string
-  type t = unit
+  type stanja = (stanje * bool) list
+  type prehod = (stanje * char option * stanje)
+  type prehodi = prehod list
+  type t = (stanja * prehodi) 
 
-  let ustvari _ _ = ()
-  let dodaj_stanje _ _ _ = ()
-  let dodaj_prehod _ _ _ _ = ()
-  let dodaj_prazen_prehod _ _ _ = ()
+  let ustvari (s : stanje) (v : bool) : t = ([(s,v)], [])
+  let dodaj_stanje (s : stanje) (v : bool) (nfa : t) : t =
+    let nova_stanja = (s,v) :: (fst nfa) in
+    let preh = snd nfa in
+    (nova_stanja, preh)
+  let dodaj_prehod (zac : stanje) (prehodno : char) (koncno : stanje) (nfa : t) : t =
+    let sezStanj = fst nfa in
+    let znak = Some prehodno in
+    let sezPrehodov = (zac,znak,koncno) :: (snd nfa) in
+    (sezStanj, sezPrehodov)
 
-  let seznam_stanj _ = []
-  let zacetno_stanje _ = ""
-  let je_sprejemno_stanje _ _ = false
-  let prehodna_funkcija _ _ _ = []
-  let seznam_prehodov _  = []
+  let dodaj_prazen_prehod (zac : stanje) (konc : stanje) (nfa : t) : t = 
+    let sezStanj = fst nfa in
+    let prehod = (zac, None, konc) in
+    let prehodi = prehod :: snd nfa in
+    (sezStanj,prehodi)
+
+  let seznam_stanj (nfa : t) : stanje list = List.map (fun (x,y) -> x) (fst nfa)
+  let zacetno_stanje (nfa : t) : stanje = 
+    let rec aux cur s =
+      match s with
+      | [] -> cur
+      | (st, v)::xs -> aux st xs
+    in aux "" (fst nfa)
+  let je_sprejemno_stanje (nfa : t) (s : stanje) = 
+    let rec aux sez =
+      match sez with
+      | [] -> false
+      | (stan,v)::xs when s=stan -> v
+      | x::xs -> aux xs
+    in aux (fst nfa)
+  let prehodna_funkcija (nfa : t) (s : stanje) (ch : char option) : stanje list = 
+    let sez = snd nfa in
+    let aux acc (zac, prehod, konc) =
+      if (zac = s && ch = prehod) then
+        konc :: acc
+      else acc in
+    List.fold_left (aux) [] sez
+  let seznam_prehodov (nfa : t) = snd nfa
 end
 
 (*----------------------------------------------------------------------------*
@@ -384,8 +437,48 @@ let enke_ali_nicle_deljive_s_3 = NFA.(
  formatu `dot`.
 [*----------------------------------------------------------------------------*)
 
-let dot_of_nfa _ = ""
-
+let dot_of_nfa (nfa : NFA.t) : string = 
+  let zac = NFA.zacetno_stanje nfa in
+  let seznama =
+    let rec aux acc1 acc2 sez =
+      match sez with
+      | [] -> (acc1,acc2)
+      | x::xs when NFA.je_sprejemno_stanje nfa x -> aux (x ^ " " ^ acc1) acc2 xs
+      | x::xs -> aux acc1 (x ^ " " ^ acc2) xs
+    in aux "" "" (NFA.seznam_stanj nfa)
+  in
+  let validNodes = fst seznama in
+  let invalidNodes = snd seznama in 
+  let validNodeString =
+    if validNodes <> "" then
+      Printf.sprintf "node [shape = doublecircle]; %s;\n  " (String.trim validNodes)
+    else
+      ""
+  in
+  let invalidNodeString =
+    if invalidNodes <> "" then
+      Printf.sprintf "node [shape = circle]; %s;" (String.trim invalidNodes)
+    else
+      ""
+    in
+  let nodes = validNodeString ^ invalidNodeString in
+  let strPrehod (z,prehodno,konc) =
+    let znak = match prehodno with
+    | Some ch -> String.make 1 ch
+    | None -> "ε" 
+    in
+    Printf.sprintf "%s -> %s [label=\"%s\"];\n  " z konc znak
+  in
+  let prehodi = List.fold_left (fun acc x -> strPrehod x ^ acc) "" (NFA.seznam_prehodov nfa) in
+  let s = Printf.sprintf "digraph NFA {
+  rankdir=LR;
+  size=\"8,5\"
+  %s
+  \"\" [shape = none];
+  \"\" -> %s;
+  %s}" nodes zac prehodi in
+  String.trim s
+  
 let () = enke_ali_nicle_deljive_s_3 |> dot_of_nfa |> print_endline
 
 (*----------------------------------------------------------------------------*
@@ -397,7 +490,61 @@ let () = enke_ali_nicle_deljive_s_3 |> dot_of_nfa |> print_endline
  avtomat sprejme podani niz.
 [*----------------------------------------------------------------------------*)
 
-let nfa_sprejema _ _ = false
+let nfa_sprejema (nfa : NFA.t) (s : string) : bool = 
+  let zac = NFA.zacetno_stanje nfa in
+  let n = String.length s in
+  let naslednjeNeobiskane all visited =
+    (* S1 \ S2 *)
+    let rec aux acc sez = 
+      match sez with
+      | x::xs when not (List.mem x visited) -> aux (x::acc) xs
+      | x::xs -> aux acc xs
+      | [] -> acc
+    in 
+    aux [] all
+  in
+  let rec go (cur : string) (i : int) (visited : string list) : bool =
+    if i=n then
+      if NFA.je_sprejemno_stanje nfa cur then
+        true
+      else
+        let vsiNeobiskani = NFA.prehodna_funkcija nfa cur None in
+        let naslednji = naslednjeNeobiskane vsiNeobiskani visited in
+        let rec aux sez =
+          match sez with
+          | [] -> false
+          | x::xs -> go x i (x::visited)
+        in aux naslednji
+    else
+      let ch = Some s.[i] in
+      let neprazni = NFA.prehodna_funkcija nfa cur ch in
+      let prazni1 = NFA.prehodna_funkcija nfa cur None in
+      let prazni = naslednjeNeobiskane prazni1 visited in
+      let rec auxN sez =
+        match sez with
+        | [] -> false
+        | x::xs ->
+          if go x (i+1) [] then
+            true
+          else
+            auxN xs
+        in
+      if auxN neprazni then 
+        true
+      else
+        let rec auxP sez vis = 
+          match sez with
+          | [] -> false
+          | x::xs ->
+            if go x (i) (x::vis) = true then
+              true
+            else
+              auxP xs (x::vis)
+        in auxP prazni visited
+        
+  in
+  go zac 0 []
+      
 
 let primer_nfa = List.filter (nfa_sprejema enke_ali_nicle_deljive_s_3) nizi
 (* val primer_nfa : string list =
